@@ -1,0 +1,79 @@
+---
+title: "MATH 534 HW 6 Q1"
+author: "David Zheng"
+date: "2025-10-19"
+output: 
+  github_document:
+    toc: true
+---
+
+# Q1
+```{r}
+# app.R
+library(shiny)
+library(ggplot2)
+library(dplyr)
+
+ui <- fluidPage(
+  titlePanel("Interactive Car Mileage Explorer"),
+
+  sidebarLayout(
+    sidebarPanel(
+      # 1. Text input for title
+      textInput("plot_title", "Plot title:", "My MPG Plot"),
+
+      # 2. Select input for x variable
+      selectInput("xvar", "Choose X-axis variable:",
+                  choices = names(mtcars),
+                  selected = "hp"),
+
+      # 3. Slider to filter by mpg
+      sliderInput("mpg_filter", "Minimum MPG:",
+                  min = min(mtcars$mpg),
+                  max = max(mtcars$mpg),
+                  value = 15),
+
+      # 4. Checkbox group to choose cylinders
+      checkboxGroupInput("cyl_filter", "Select cylinder types:",
+                         choices = sort(unique(mtcars$cyl)),
+                         selected = unique(mtcars$cyl)),
+
+      # 5. Radio buttons for color
+      radioButtons("color_choice", "Point color:",
+                   choices = c("blue", "red", "darkgreen", "purple"),
+                   selected = "blue")
+    ),
+
+    mainPanel(
+      plotOutput("scatter_plot"),
+      tableOutput("filtered_table")
+    )
+  )
+)
+
+server <- function(input, output) {
+
+  filtered_data <- reactive({
+    mtcars %>%
+      filter(mpg >= input$mpg_filter,
+             cyl %in% input$cyl_filter)
+  })
+
+  output$scatter_plot <- renderPlot({
+    ggplot(filtered_data(), aes_string(x = input$xvar, y = "mpg")) +
+      geom_point(color = input$color_choice, size = 3) +
+      labs(
+        x = input$xvar,
+        y = "Miles per Gallon (mpg)",
+        title = input$plot_title
+      ) +
+      theme_minimal(base_size = 14)
+  })
+
+  output$filtered_table <- renderTable({
+    head(filtered_data(), 10)
+  })
+}
+
+shinyApp(ui = ui, server = server)
+```

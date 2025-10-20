@@ -1,0 +1,141 @@
+MATH 534 HW 6 Q3
+================
+David Zheng
+2025-10-19
+
+- [Q3](#q3)
+
+# Q3
+
+``` r
+# app.R
+library(shiny)
+library(ggplot2)
+library(dplyr)
+```
+
+    ## 
+    ## Attaching package: 'dplyr'
+
+    ## The following objects are masked from 'package:stats':
+    ## 
+    ##     filter, lag
+
+    ## The following objects are masked from 'package:base':
+    ## 
+    ##     intersect, setdiff, setequal, union
+
+``` r
+library(macleish)
+```
+
+    ## Loading required package: etl
+
+``` r
+data(whately_2015)
+data(orchard_2015)
+
+ui <- fluidPage(
+  titlePanel("MacLeish Weather Time Series (2015)"),
+
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("station", "Select Weather Station:",
+                  choices = c("Whately" = "whately_2015",
+                              "Orchard" = "orchard_2015"),
+                  selected = "whately_2015"),
+
+      dateRangeInput("date_range", "Select Date Range:",
+                     start = "2015-01-01", end = "2015-12-31",
+                     min = "2015-01-01", max = "2015-12-31"),
+
+      uiOutput("var_ui")
+    ),
+
+    mainPanel(
+      plotOutput("weather_plot", height = "500px"),
+      tableOutput("summary_table"),
+      verbatimTextOutput("debug_names")
+    )
+  )
+)
+
+server <- function(input, output) {
+
+  dataset <- reactive({
+    if (input$station == "whately_2015") {
+      whately_2015
+    } else {
+      orchard_2015
+    }
+  })
+
+  # Show column names to help debug if needed
+  output$debug_names <- renderPrint({
+    names(dataset())
+  })
+
+  output$var_ui <- renderUI({
+    df <- dataset()
+    numeric_cols <- names(df)[sapply(df, is.numeric)]
+    selectInput("yvar", "Variable to Plot:",
+                choices = numeric_cols,
+                selected = numeric_cols[1])
+  })
+
+  filtered_data <- reactive({
+    df <- dataset()
+    # find which column looks like a date/time
+    date_col <- names(df)[sapply(df, inherits, "POSIXt") | grepl("date", names(df), ignore.case = TRUE)]
+    if (length(date_col) == 0) stop("No date column found in dataset")
+    df %>%
+      rename(time = all_of(date_col[1])) %>%
+      filter(time >= input$date_range[1],
+             time <= input$date_range[2])
+  })
+
+  output$weather_plot <- renderPlot({
+    req(input$yvar)
+    df <- filtered_data()
+    ggplot(df, aes(x = time, y = .data[[input$yvar]])) +
+      geom_line(color = "steelblue") +
+      labs(
+        title = paste("Time Series of", input$yvar, "at", input$station),
+        x = "Date",
+        y = input$yvar
+      ) +
+      theme_minimal(base_size = 14)
+  })
+
+  output$summary_table <- renderTable({
+    df <- filtered_data()
+    tibble(
+      Station = input$station,
+      Variable = input$yvar,
+      Start = min(df$time, na.rm = TRUE),
+      End = max(df$time, na.rm = TRUE),
+      Mean = mean(df[[input$yvar]], na.rm = TRUE),
+      Missing = sum(is.na(df[[input$yvar]]))
+    )
+  })
+}
+
+shinyApp(ui = ui, server = server)
+```
+
+    ## 
+    ## Listening on http://127.0.0.1:7535
+
+    ## Warning: Error in [[: Can't extract column with `input$yvar`.
+    ## ✖ Subscript `input$yvar` must be size 1, not 0.
+
+![](David-Zheng-MATH-534-HW-6-Q3_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->
+
+One irregularity I noticed was that the Orchard weather station had some
+unreasonably big dips in recorded temperatures for some days in the
+second half of November 2015 going as low as -90 degrees. Similarly, the
+Orchard weather station had some unreasonably big dips in recorded
+pressure for some days in the second half of November 2015 as well as
+sometime in late January 2015 going as low as 0. This indicates possible
+sensor malfunctions or calibration gaps in the weather station during
+that time period.
